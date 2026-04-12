@@ -53,6 +53,46 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
     let l4_offset = ETH_HDR_LEN + ip.header_len_bytes();
     let (src_port_be, dst_port_be, checksum_offset) = load_ports(&ctx, protocol, l4_offset)?;
 
+    if let Some(flow) = lookup_flow(&FlowStateKey::new(
+        protocol,
+        ip.saddr_be,
+        ip.daddr_be,
+        src_port_be,
+        dst_port_be,
+    )) {
+        rewrite_ipv4_addr(
+            &mut ctx,
+            ETH_HDR_LEN + offset_of!(Ipv4Hdr, saddr_be),
+            ETH_HDR_LEN + offset_of!(Ipv4Hdr, check_be),
+            checksum_offset,
+            ip.saddr_be,
+            flow.rewrite_src_addr_be,
+        )?;
+        rewrite_ipv4_addr(
+            &mut ctx,
+            ETH_HDR_LEN + offset_of!(Ipv4Hdr, daddr_be),
+            ETH_HDR_LEN + offset_of!(Ipv4Hdr, check_be),
+            checksum_offset,
+            ip.daddr_be,
+            flow.rewrite_dst_addr_be,
+        )?;
+        rewrite_l4_port(
+            &mut ctx,
+            port_offset(protocol, l4_offset, true),
+            checksum_offset,
+            src_port_be,
+            flow.rewrite_src_port_be,
+        )?;
+        rewrite_l4_port(
+            &mut ctx,
+            port_offset(protocol, l4_offset, false),
+            checksum_offset,
+            dst_port_be,
+            flow.rewrite_dst_port_be,
+        )?;
+        return Ok(TC_ACT_PIPE);
+    }
+
     let exact_key = ForwardRuleKey::new(protocol, ip.daddr_be, dst_port_be);
     let wildcard_key = ForwardRuleKey::new(protocol, 0, dst_port_be);
     let rule = lookup_rule(&exact_key).or_else(|| lookup_rule(&wildcard_key));
@@ -64,14 +104,28 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
     let flow_key = FlowStateKey::new(
         protocol,
         rule.backend_addr_be,
-        ip.saddr_be,
+        ip.daddr_be,
         rule.backend_port_be,
         src_port_be,
     );
-    let flow_value = FlowStateValue::new(ip.daddr_be, dst_port_be, etr_types::SnatMode::Masquerade);
+    let flow_value = FlowStateValue::new(
+        ip.daddr_be,
+        dst_port_be,
+        ip.saddr_be,
+        src_port_be,
+        etr_types::SnatMode::Masquerade,
+    );
 
     let _ = ETR_TC_FLOW_STATE.insert(&flow_key, &flow_value, 0);
 
+    rewrite_ipv4_addr(
+        &mut ctx,
+        ETH_HDR_LEN + offset_of!(Ipv4Hdr, saddr_be),
+        ETH_HDR_LEN + offset_of!(Ipv4Hdr, check_be),
+        checksum_offset,
+        ip.saddr_be,
+        ip.daddr_be,
+    )?;
     rewrite_ipv4_addr(
         &mut ctx,
         ETH_HDR_LEN + offset_of!(Ipv4Hdr, daddr_be),
@@ -92,42 +146,7 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
 }
 
 fn try_etr_egress(mut ctx: TcContext) -> Result<i32, i32> {
-    let eth = load_eth(&ctx)?;
-    if u16::from_be(eth.ether_type_be) != ETH_P_IP {
-        return Ok(TC_ACT_PIPE);
-    }
-
-    let ip = load_ipv4(&ctx)?;
-    if ip.version() != IPV4_PROTOCOL_VERSION || ip.is_fragmented() {
-        return Ok(TC_ACT_PIPE);
-    }
-
-    let protocol = transport_protocol(ip.protocol)?;
-    let l4_offset = ETH_HDR_LEN + ip.header_len_bytes();
-    let (src_port_be, dst_port_be, checksum_offset) = load_ports(&ctx, protocol, l4_offset)?;
-    let flow_key = FlowStateKey::new(protocol, ip.saddr_be, ip.daddr_be, src_port_be, dst_port_be);
-    let flow = unsafe { ETR_TC_FLOW_STATE.get(&flow_key).copied() };
-    let flow = match flow {
-        Some(flow) => flow,
-        None => return Ok(TC_ACT_PIPE),
-    };
-
-    rewrite_ipv4_addr(
-        &mut ctx,
-        ETH_HDR_LEN + offset_of!(Ipv4Hdr, saddr_be),
-        ETH_HDR_LEN + offset_of!(Ipv4Hdr, check_be),
-        checksum_offset,
-        ip.saddr_be,
-        flow.rewrite_src_addr_be,
-    )?;
-    rewrite_l4_port(
-        &mut ctx,
-        port_offset(protocol, l4_offset, true),
-        checksum_offset,
-        src_port_be,
-        flow.rewrite_src_port_be,
-    )?;
-
+    let _ = &mut ctx;
     Ok(TC_ACT_PIPE)
 }
 
@@ -241,6 +260,10 @@ fn rewrite_l4_port(
 
 fn lookup_rule(key: &ForwardRuleKey) -> Option<ForwardRuleValue> {
     unsafe { ETR_TC_FORWARD_RULES.get(key).copied() }
+}
+
+fn lookup_flow(key: &FlowStateKey) -> Option<FlowStateValue> {
+    unsafe { ETR_TC_FLOW_STATE.get(key).copied() }
 }
 
 fn transport_protocol(protocol: u8) -> Result<TransportProtocol, i32> {

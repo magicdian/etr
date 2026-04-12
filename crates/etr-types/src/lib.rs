@@ -130,21 +130,27 @@ impl FlowStateKey {
 pub struct FlowStateValue {
     pub rewrite_src_addr_be: u32,
     pub rewrite_src_port_be: u16,
+    pub rewrite_dst_addr_be: u32,
+    pub rewrite_dst_port_be: u16,
     pub snat_mode: u8,
-    pub reserved: u8,
+    pub reserved: [u8; 3],
 }
 
 impl FlowStateValue {
     pub const fn new(
         rewrite_src_addr_be: u32,
         rewrite_src_port_be: u16,
+        rewrite_dst_addr_be: u32,
+        rewrite_dst_port_be: u16,
         snat_mode: SnatMode,
     ) -> Self {
         Self {
             rewrite_src_addr_be,
             rewrite_src_port_be,
+            rewrite_dst_addr_be,
+            rewrite_dst_port_be,
             snat_mode: snat_mode.as_u8(),
-            reserved: 0,
+            reserved: [0; 3],
         }
     }
 }
