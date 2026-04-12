@@ -57,10 +57,11 @@ curl -X POST http://127.0.0.1:9911/api/v1/admin/reload
 ```
 
 On non-Linux development machines, the daemon falls back to a safe `tc-stub` backend so the config and reload path can still be exercised.
+On Linux, the daemon also falls back to `tc-stub` if you do not pass `--bpf-object`. That is useful for validating config parsing and the management API before the real eBPF object is built.
 
 ## Linux TC Path
 
-On Linux, `etrd` now expects a compiled eBPF object and will use the Aya-backed TC data plane instead of the stub backend.
+On Linux, `etrd` can consume a compiled eBPF object and use the Aya-backed TC data plane instead of the stub backend.
 
 Current startup shape:
 
@@ -77,8 +78,41 @@ Current implementation assumptions:
 
 ## Linux Build Notes
 
-The Linux compile-and-run path for the eBPF object still needs to be validated on a real Linux host.
-The repository now contains the Aya program source and userspace loader integration, but this Windows session only verified the Rust workspace default members, not the Linux eBPF target build.
+The eBPF object is built from the `etr-ebpf` binary target, not from a Rust library artifact.
+
+One-time setup on Linux:
+
+```bash
+rustup toolchain install nightly --component rust-src
+cargo install bpf-linker
+```
+
+Build the eBPF object:
+
+```bash
+RUSTFLAGS="-C debuginfo=2 -C link-arg=--btf" \
+CARGO_TARGET_BPFEL_UNKNOWN_NONE_LINKER=bpf-linker \
+cargo +nightly build -p etr-ebpf \
+  --target bpfel-unknown-none \
+  -Z build-std=core \
+  --release
+```
+
+Expected output path:
+
+```bash
+target/bpfel-unknown-none/release/etr-ebpf
+```
+
+Run the daemon against that object:
+
+```bash
+cargo run -p etrd -- \
+  --config config/etr.toml \
+  --bpf-object target/bpfel-unknown-none/release/etr-ebpf
+```
+
+If you omit `--bpf-object`, Linux falls back to the safe `tc-stub` backend so you can still validate config parsing and the management API.
 
 ## Deployment Notes
 

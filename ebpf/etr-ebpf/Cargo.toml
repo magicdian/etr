@@ -4,8 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[lib]
-path = "src/lib.rs"
+[[bin]]
+name = "etr-ebpf"
+path = "src/main.rs"
 
 [dependencies]
 aya-ebpf = "0.1.1"

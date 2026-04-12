@@ -113,7 +113,14 @@ fn build_tc_data_plane(
 ) -> Result<Arc<dyn DataPlane>, DataPlaneError> {
     #[cfg(target_os = "linux")]
     {
-        let object_path = bpf_object.ok_or(DataPlaneError::MissingObjectPath)?;
+        let Some(object_path) = bpf_object else {
+            tracing::warn!(
+                backend = "tc-stub",
+                interface = config.data_plane.external_interface.as_str(),
+                "no eBPF object provided on Linux; falling back to stub data plane"
+            );
+            return Ok(Arc::new(TcDataPlane::new()));
+        };
         let data_plane = crate::linux::LinuxTcDataPlane::new(
             config.data_plane.external_interface.clone(),
             object_path,

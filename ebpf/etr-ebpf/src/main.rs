@@ -70,9 +70,7 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
     );
     let flow_value = FlowStateValue::new(ip.daddr_be, dst_port_be, etr_types::SnatMode::Masquerade);
 
-    unsafe {
-        let _ = ETR_TC_FLOW_STATE.insert(&flow_key, &flow_value, 0);
-    }
+    let _ = ETR_TC_FLOW_STATE.insert(&flow_key, &flow_value, 0);
 
     rewrite_ipv4_addr(
         &mut ctx,
