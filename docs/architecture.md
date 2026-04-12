@@ -16,6 +16,25 @@
 - SNAT/MASQUERADE return path
 - Single-host gateway deployment
 
+## Current Linux TC Flow
+
+- ingress:
+  match frontend rule and apply forward `DNAT`
+- egress:
+  apply forward `SNAT/MASQUERADE` for packets leaving toward the backend
+- ingress:
+  apply reverse NAT for backend replies before they re-enter the host stack
+
+This ordering intentionally mirrors the operational shape of `iptables` `PREROUTING DNAT` plus
+`POSTROUTING MASQUERADE`, because applying source NAT too early at ingress can break forwarding on
+real gateway hosts.
+
+## Linux Host Prerequisites
+
+- `net.ipv4.ip_forward = 1`
+- `rp_filter` on the external interface should be `0` or `2`
+- cloud security groups and host firewalls must allow the configured frontend ports
+
 ## Planned Evolution
 
 - Add IPv6 parsing and rule validation

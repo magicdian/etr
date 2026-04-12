@@ -74,7 +74,13 @@ Current implementation assumptions:
 - attaches `etr_ingress` to TC ingress on `[data_plane].external_interface`
 - attaches `etr_egress` to TC egress on the same interface
 - syncs the `ETR_TC_FORWARD_RULES` and `ETR_TC_FLOW_STATE` maps from user-space config
-- performs IPv4 `TCP/UDP` destination rewrite on ingress and reverse SNAT on egress
+- performs forward `DNAT` on ingress, forward `SNAT/MASQUERADE` on egress, and reverse NAT on ingress for backend replies
+
+Linux forwarding prerequisites:
+
+- `net.ipv4.ip_forward = 1`
+- `net.ipv4.conf.<external_interface>.rp_filter = 0` or `2`
+- upstream cloud security groups or host firewalls must allow the exposed frontend ports
 
 ## Linux Build Notes
 

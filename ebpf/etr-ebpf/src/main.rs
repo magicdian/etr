@@ -108,24 +108,31 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
         rule.backend_port_be,
         src_port_be,
     );
-    let flow_value = FlowStateValue::new(
+    let reverse_flow_value = FlowStateValue::new(
         ip.daddr_be,
         dst_port_be,
         ip.saddr_be,
         src_port_be,
         etr_types::SnatMode::Masquerade,
     );
-
-    let _ = ETR_TC_FLOW_STATE.insert(&flow_key, &flow_value, 0);
-
-    rewrite_ipv4_addr(
-        &mut ctx,
-        ETH_HDR_LEN + offset_of!(Ipv4Hdr, saddr_be),
-        ETH_HDR_LEN + offset_of!(Ipv4Hdr, check_be),
-        checksum_offset,
+    let forward_flow_key = FlowStateKey::new(
+        protocol,
         ip.saddr_be,
+        rule.backend_addr_be,
+        src_port_be,
+        rule.backend_port_be,
+    );
+    let forward_flow_value = FlowStateValue::new(
         ip.daddr_be,
-    )?;
+        src_port_be,
+        rule.backend_addr_be,
+        rule.backend_port_be,
+        etr_types::SnatMode::Masquerade,
+    );
+
+    let _ = ETR_TC_FLOW_STATE.insert(&flow_key, &reverse_flow_value, 0);
+    let _ = ETR_TC_FLOW_STATE.insert(&forward_flow_key, &forward_flow_value, 0);
+
     rewrite_ipv4_addr(
         &mut ctx,
         ETH_HDR_LEN + offset_of!(Ipv4Hdr, daddr_be),
@@ -146,7 +153,46 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
 }
 
 fn try_etr_egress(mut ctx: TcContext) -> Result<i32, i32> {
-    let _ = &mut ctx;
+    let eth = load_eth(&ctx)?;
+    if u16::from_be(eth.ether_type_be) != ETH_P_IP {
+        return Ok(TC_ACT_PIPE);
+    }
+
+    let ip = load_ipv4(&ctx)?;
+    if ip.version() != IPV4_PROTOCOL_VERSION || ip.is_fragmented() {
+        return Ok(TC_ACT_PIPE);
+    }
+
+    let protocol = transport_protocol(ip.protocol)?;
+    let l4_offset = ETH_HDR_LEN + ip.header_len_bytes();
+    let (src_port_be, dst_port_be, checksum_offset) = load_ports(&ctx, protocol, l4_offset)?;
+    let flow = match lookup_flow(&FlowStateKey::new(
+        protocol,
+        ip.saddr_be,
+        ip.daddr_be,
+        src_port_be,
+        dst_port_be,
+    )) {
+        Some(flow) => flow,
+        None => return Ok(TC_ACT_PIPE),
+    };
+
+    rewrite_ipv4_addr(
+        &mut ctx,
+        ETH_HDR_LEN + offset_of!(Ipv4Hdr, saddr_be),
+        ETH_HDR_LEN + offset_of!(Ipv4Hdr, check_be),
+        checksum_offset,
+        ip.saddr_be,
+        flow.rewrite_src_addr_be,
+    )?;
+    rewrite_l4_port(
+        &mut ctx,
+        port_offset(protocol, l4_offset, true),
+        checksum_offset,
+        src_port_be,
+        flow.rewrite_src_port_be,
+    )?;
+
     Ok(TC_ACT_PIPE)
 }
 
