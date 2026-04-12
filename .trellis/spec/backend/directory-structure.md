@@ -11,7 +11,7 @@ Keep transport concerns, config contracts, and runtime orchestration separate.
 
 ```text
 config/
-  etr.toml              # Example runtime config
+  etr.toml.example      # Example runtime config template
 crates/
   etr-types/            # Shared wire types for kernel/user-space coordination
   etr-config/           # Shared config schema and validation

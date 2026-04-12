@@ -14,7 +14,7 @@ eBPF-based transit router service with a Rust control plane and a TC-first forwa
 ## Repository Layout
 
 ```text
-config/               Example runtime configuration
+config/               Example runtime configuration and local overrides
 crates/etr-types/     Shared kernel/user-space wire types for TC maps and flow state
 crates/etr-config/    Shared config schema and validation
 crates/etr-control/   Control-plane runtime and data-plane abstraction
@@ -24,7 +24,7 @@ ebpf/etr-ebpf/        Aya-based TC ingress/egress programs
 
 ## Example Config
 
-See [`config/etr.toml`](./config/etr.toml) for a point-to-point IPv4 forwarding example.
+See [`config/etr.toml.example`](./config/etr.toml.example) for a point-to-point IPv4 forwarding example.
 
 Each rule currently:
 
@@ -46,7 +46,10 @@ The daemon exposes:
 
 ## Running The Control Plane
 
+Create a local config from the example before running the daemon:
+
 ```bash
+cp config/etr.toml.example config/etr.toml
 cargo run -p etrd -- --config config/etr.toml
 ```
 

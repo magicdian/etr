@@ -1,0 +1,33 @@
+[service]
+node_name = "edge-hk-01"
+
+[management]
+listen = "127.0.0.1:9911"
+
+[data_plane]
+kind = "tc"
+external_interface = "eth0"
+
+[[rules]]
+name = "ssh-proxy"
+protocol = "tcp"
+family = "ipv4"
+listen_addr = "0.0.0.0"
+listen_port = 16020
+snat = "masquerade"
+
+[[rules.backends]]
+addr = "8.8.8.8"
+port = 11426
+
+[[rules]]
+name = "panel-proxy"
+protocol = "tcp"
+family = "ipv4"
+listen_addr = "0.0.0.0"
+listen_port = 18510
+snat = "masquerade"
+
+[[rules.backends]]
+addr = "8.8.8.8"
+port = 18510
