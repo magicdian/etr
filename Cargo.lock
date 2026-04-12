@@ -377,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "etr-config"
-version = "0.1.0"
+version = "2604.13.1"
 dependencies = [
  "etr-types",
  "serde",
@@ -387,7 +387,7 @@ dependencies = [
 
 [[package]]
 name = "etr-control"
-version = "0.1.0"
+version = "2604.13.1"
 dependencies = [
  "async-trait",
  "aya",
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "etr-ebpf"
-version = "0.1.0"
+version = "2604.13.1"
 dependencies = [
  "aya-ebpf",
  "etr-types",
@@ -409,11 +409,11 @@ dependencies = [
 
 [[package]]
 name = "etr-types"
-version = "0.1.0"
+version = "2604.13.1"
 
 [[package]]
 name = "etrd"
-version = "0.1.0"
+version = "2604.13.1"
 dependencies = [
  "anyhow",
  "axum",

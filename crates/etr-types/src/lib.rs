@@ -4,10 +4,12 @@ use core::mem;
 
 pub const TC_FORWARD_RULES_MAP: &str = "ETR_TC_FORWARD_RULES";
 pub const TC_FLOW_STATE_MAP: &str = "ETR_TC_FLOW_STATE";
+pub const TC_RUNTIME_STATS_MAP: &str = "ETR_TC_RUNTIME_STATS";
 pub const TC_INGRESS_PROGRAM_NAME: &str = "etr_ingress";
 pub const TC_EGRESS_PROGRAM_NAME: &str = "etr_egress";
 pub const MAX_FORWARD_RULES: u32 = 4096;
 pub const MAX_FLOW_STATES: u32 = 65535;
+pub const MAX_RUNTIME_STATS: u32 = 6;
 
 pub const IPV4_PROTOCOL_VERSION: u8 = 4;
 pub const ETH_P_IP: u16 = 0x0800;
@@ -46,6 +48,23 @@ pub enum SnatMode {
 impl SnatMode {
     pub const fn as_u8(self) -> u8 {
         self as u8
+    }
+}
+
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeStat {
+    IngressRuleHits = 0,
+    IngressReverseHits = 1,
+    EgressFlowHits = 2,
+    FlowCreations = 3,
+    RuleMisses = 4,
+    ParseDrops = 5,
+}
+
+impl RuntimeStat {
+    pub const fn as_u32(self) -> u32 {
+        self as u32
     }
 }
 

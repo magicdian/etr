@@ -5,13 +5,13 @@ use core::mem::offset_of;
 
 use aya_ebpf::bindings::{TC_ACT_PIPE, TC_ACT_SHOT};
 use aya_ebpf::macros::{classifier, map};
-use aya_ebpf::maps::{HashMap, LruHashMap};
+use aya_ebpf::maps::{HashMap, LruHashMap, PerCpuArray};
 use aya_ebpf::programs::TcContext;
 use etr_types::{
     BPF_F_MARK_MANGLED_0, ETH_HDR_LEN, ETH_P_IP, EthHdr, FlowStateKey, FlowStateValue,
     ForwardRuleKey, ForwardRuleValue, IPPROTO_TCP, IPPROTO_UDP, IPV4_PROTOCOL_VERSION, Ipv4Hdr,
-    L4_IPV4_ADDR_CSUM_FLAGS, L4_PORT_CSUM_FLAGS, MAX_FLOW_STATES, MAX_FORWARD_RULES, TcpHdr,
-    TransportProtocol, UdpHdr,
+    L4_IPV4_ADDR_CSUM_FLAGS, L4_PORT_CSUM_FLAGS, MAX_FLOW_STATES, MAX_FORWARD_RULES,
+    MAX_RUNTIME_STATS, RuntimeStat, TcpHdr, TransportProtocol, UdpHdr,
 };
 
 #[map]
@@ -22,11 +22,19 @@ static ETR_TC_FORWARD_RULES: HashMap<ForwardRuleKey, ForwardRuleValue> =
 static ETR_TC_FLOW_STATE: LruHashMap<FlowStateKey, FlowStateValue> =
     LruHashMap::with_max_entries(MAX_FLOW_STATES, 0);
 
+#[map]
+static ETR_TC_RUNTIME_STATS: PerCpuArray<u64> = PerCpuArray::with_max_entries(MAX_RUNTIME_STATS, 0);
+
 #[classifier]
 pub fn etr_ingress(ctx: TcContext) -> i32 {
     match try_etr_ingress(ctx) {
         Ok(ret) => ret,
-        Err(ret) => ret,
+        Err(ret) => {
+            if ret == TC_ACT_SHOT {
+                increment_stat(RuntimeStat::ParseDrops);
+            }
+            ret
+        }
     }
 }
 
@@ -34,7 +42,12 @@ pub fn etr_ingress(ctx: TcContext) -> i32 {
 pub fn etr_egress(ctx: TcContext) -> i32 {
     match try_etr_egress(ctx) {
         Ok(ret) => ret,
-        Err(ret) => ret,
+        Err(ret) => {
+            if ret == TC_ACT_SHOT {
+                increment_stat(RuntimeStat::ParseDrops);
+            }
+            ret
+        }
     }
 }
 
@@ -60,6 +73,7 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
         src_port_be,
         dst_port_be,
     )) {
+        increment_stat(RuntimeStat::IngressReverseHits);
         rewrite_ipv4_addr(
             &mut ctx,
             ETH_HDR_LEN + offset_of!(Ipv4Hdr, daddr_be),
@@ -83,8 +97,14 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
     let rule = lookup_rule(&exact_key).or_else(|| lookup_rule(&wildcard_key));
     let rule = match rule {
         Some(rule) => rule,
-        None => return Ok(TC_ACT_PIPE),
+        None => {
+            increment_stat(RuntimeStat::RuleMisses);
+            return Ok(TC_ACT_PIPE);
+        }
     };
+
+    increment_stat(RuntimeStat::IngressRuleHits);
+    increment_stat(RuntimeStat::FlowCreations);
 
     let reverse_ingress_key = FlowStateKey::new(
         protocol,
@@ -176,6 +196,8 @@ fn try_etr_egress(mut ctx: TcContext) -> Result<i32, i32> {
         Some(flow) => flow,
         None => return Ok(TC_ACT_PIPE),
     };
+
+    increment_stat(RuntimeStat::EgressFlowHits);
 
     rewrite_ipv4_addr(
         &mut ctx,
@@ -310,6 +332,14 @@ fn lookup_rule(key: &ForwardRuleKey) -> Option<ForwardRuleValue> {
 
 fn lookup_flow(key: &FlowStateKey) -> Option<FlowStateValue> {
     unsafe { ETR_TC_FLOW_STATE.get(key).copied() }
+}
+
+fn increment_stat(stat: RuntimeStat) {
+    unsafe {
+        if let Some(ptr) = ETR_TC_RUNTIME_STATS.get_ptr_mut(stat.as_u32()) {
+            *ptr += 1;
+        }
+    }
 }
 
 fn transport_protocol(protocol: u8) -> Result<TransportProtocol, i32> {

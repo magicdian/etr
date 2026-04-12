@@ -19,6 +19,54 @@ pub struct DataPlaneStatus {
     pub backend: String,
     pub installed_rules: usize,
     pub interface: Option<String>,
+    pub object_path: Option<String>,
+    pub flow_entries: Option<usize>,
+    pub stats: Option<DataPlaneStats>,
+    pub preflight: Option<PreflightReport>,
+    pub diagnostics_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Default)]
+pub struct DataPlaneStats {
+    pub ingress_rule_hits: u64,
+    pub ingress_reverse_hits: u64,
+    pub egress_flow_hits: u64,
+    pub flow_creations: u64,
+    pub rule_misses: u64,
+    pub parse_drops: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct PreflightReport {
+    pub passed: bool,
+    pub override_active: bool,
+    pub checks: Vec<PreflightCheck>,
+}
+
+impl PreflightReport {
+    pub fn summary(&self) -> String {
+        self.checks
+            .iter()
+            .filter(|check| !check.ok && check.critical)
+            .map(|check| format!("{}: {}", check.name, check.message))
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct PreflightCheck {
+    pub name: String,
+    pub ok: bool,
+    pub critical: bool,
+    pub message: String,
+    pub remediation: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildDataPlaneOptions {
+    pub bpf_object: Option<PathBuf>,
+    pub allow_preflight_warnings: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +92,8 @@ pub enum DataPlaneError {
     Setup(String),
     #[error("Linux TC backend map sync failed: {0}")]
     MapSync(String),
+    #[error("Linux TC backend preflight failed: {0}")]
+    Preflight(String),
 }
 
 #[async_trait]
@@ -94,26 +144,31 @@ impl DataPlane for TcDataPlane {
             backend: "tc-stub".to_owned(),
             installed_rules: installed_rules.len(),
             interface: None,
+            object_path: None,
+            flow_entries: None,
+            stats: None,
+            preflight: None,
+            diagnostics_error: None,
         }
     }
 }
 
 pub fn build_data_plane(
     config: &EtrConfig,
-    bpf_object: Option<PathBuf>,
+    options: BuildDataPlaneOptions,
 ) -> Result<Arc<dyn DataPlane>, DataPlaneError> {
     match config.data_plane.kind {
-        DataPlaneKind::Tc => build_tc_data_plane(config, bpf_object),
+        DataPlaneKind::Tc => build_tc_data_plane(config, options),
     }
 }
 
 fn build_tc_data_plane(
     config: &EtrConfig,
-    bpf_object: Option<PathBuf>,
+    options: BuildDataPlaneOptions,
 ) -> Result<Arc<dyn DataPlane>, DataPlaneError> {
     #[cfg(target_os = "linux")]
     {
-        let Some(object_path) = bpf_object else {
+        let Some(object_path) = options.bpf_object else {
             tracing::warn!(
                 backend = "tc-stub",
                 interface = config.data_plane.external_interface.as_str(),
@@ -124,6 +179,7 @@ fn build_tc_data_plane(
         let data_plane = crate::linux::LinuxTcDataPlane::new(
             config.data_plane.external_interface.clone(),
             object_path,
+            options.allow_preflight_warnings,
         )?;
         return Ok(Arc::new(data_plane));
     }
@@ -131,7 +187,7 @@ fn build_tc_data_plane(
     #[cfg(not(target_os = "linux"))]
     {
         let _ = config;
-        let _ = bpf_object;
+        let _ = options;
         Ok(Arc::new(TcDataPlane::new()))
     }
 }

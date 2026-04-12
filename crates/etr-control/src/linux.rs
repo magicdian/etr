@@ -1,22 +1,24 @@
 #![cfg(target_os = "linux")]
 
-use aya::maps::HashMap;
+use aya::maps::{HashMap, PerCpuArray};
 use aya::programs::{SchedClassifier, TcAttachType, tc};
 use aya::{Ebpf, EbpfLoader};
 use etr_config::EtrConfig;
 use etr_types::{
-    FlowStateKey, FlowStateValue, ForwardRuleKey, ForwardRuleValue, TC_EGRESS_PROGRAM_NAME,
-    TC_FLOW_STATE_MAP, TC_FORWARD_RULES_MAP, TC_INGRESS_PROGRAM_NAME,
+    FlowStateKey, FlowStateValue, ForwardRuleKey, ForwardRuleValue, RuntimeStat,
+    TC_EGRESS_PROGRAM_NAME, TC_FLOW_STATE_MAP, TC_FORWARD_RULES_MAP, TC_INGRESS_PROGRAM_NAME,
+    TC_RUNTIME_STATS_MAP,
 };
 use std::path::PathBuf;
 use tokio::sync::Mutex;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::dataplane::{
-    ApplyReport, DataPlane, DataPlaneError, DataPlaneStatus, build_installed_rules,
-    count_rule_changes,
+    ApplyReport, DataPlane, DataPlaneError, DataPlaneStats, DataPlaneStatus, PreflightReport,
+    build_installed_rules, count_rule_changes,
 };
 use crate::kernel::encode_enabled_rules;
+use crate::preflight::run_linux_preflight;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -42,6 +44,7 @@ unsafe impl aya::Pod for PodFlowStateValue {}
 pub struct LinuxTcDataPlane {
     interface: String,
     object_path: PathBuf,
+    preflight: PreflightReport,
     state: Mutex<Option<LinuxTcState>>,
 }
 
@@ -51,16 +54,34 @@ struct LinuxTcState {
 }
 
 impl LinuxTcDataPlane {
-    pub fn new(interface: String, object_path: PathBuf) -> Result<Self, DataPlaneError> {
+    pub fn new(
+        interface: String,
+        object_path: PathBuf,
+        allow_preflight_warnings: bool,
+    ) -> Result<Self, DataPlaneError> {
         if interface.trim().is_empty() {
             return Err(DataPlaneError::Setup(
                 "external interface must not be empty".to_owned(),
             ));
         }
 
+        let preflight = run_linux_preflight(&interface, &object_path, allow_preflight_warnings);
+        if !preflight.passed && !allow_preflight_warnings {
+            return Err(DataPlaneError::Preflight(preflight.summary()));
+        }
+        if !preflight.passed {
+            warn!(
+                interface = interface.as_str(),
+                object_path = %object_path.display(),
+                failures = preflight.summary(),
+                "Linux TC preflight failed but override is active"
+            );
+        }
+
         Ok(Self {
             interface,
             object_path,
+            preflight,
             state: Mutex::new(None),
         })
     }
@@ -204,6 +225,45 @@ impl LinuxTcDataPlane {
 
         Ok(())
     }
+
+    fn count_flow_entries(bpf: &mut Ebpf) -> Result<usize, DataPlaneError> {
+        let flow_map: HashMap<_, PodFlowStateKey, PodFlowStateValue> =
+            HashMap::try_from(bpf.map_mut(TC_FLOW_STATE_MAP).ok_or_else(|| {
+                DataPlaneError::MapSync(format!("missing map '{TC_FLOW_STATE_MAP}' in eBPF object"))
+            })?)
+            .map_err(|error| DataPlaneError::MapSync(format!("flow map open failed: {error}")))?;
+
+        Ok(flow_map.keys().filter_map(Result::ok).count())
+    }
+
+    fn read_stats(bpf: &mut Ebpf) -> Result<DataPlaneStats, DataPlaneError> {
+        let stats_map: PerCpuArray<_, u64> =
+            PerCpuArray::try_from(bpf.map_mut(TC_RUNTIME_STATS_MAP).ok_or_else(|| {
+                DataPlaneError::MapSync(format!(
+                    "missing map '{TC_RUNTIME_STATS_MAP}' in eBPF object"
+                ))
+            })?)
+            .map_err(|error| DataPlaneError::MapSync(format!("stats map open failed: {error}")))?;
+
+        Ok(DataPlaneStats {
+            ingress_rule_hits: sum_stat(&stats_map, RuntimeStat::IngressRuleHits)?,
+            ingress_reverse_hits: sum_stat(&stats_map, RuntimeStat::IngressReverseHits)?,
+            egress_flow_hits: sum_stat(&stats_map, RuntimeStat::EgressFlowHits)?,
+            flow_creations: sum_stat(&stats_map, RuntimeStat::FlowCreations)?,
+            rule_misses: sum_stat(&stats_map, RuntimeStat::RuleMisses)?,
+            parse_drops: sum_stat(&stats_map, RuntimeStat::ParseDrops)?,
+        })
+    }
+}
+
+fn sum_stat(
+    stats_map: &PerCpuArray<&mut aya::maps::MapData, u64>,
+    stat: RuntimeStat,
+) -> Result<u64, DataPlaneError> {
+    stats_map
+        .get(&stat.as_u32(), 0)
+        .map(|values| values.iter().copied().sum())
+        .map_err(|error| DataPlaneError::MapSync(format!("stats read failed: {error}")))
 }
 
 #[async_trait::async_trait]
@@ -244,16 +304,39 @@ impl DataPlane for LinuxTcDataPlane {
     }
 
     async fn status(&self) -> DataPlaneStatus {
-        let state = self.state.lock().await;
-        let installed_rules = state
-            .as_ref()
-            .map(|state| state.installed_rules.len())
-            .unwrap_or(0);
+        let mut state = self.state.lock().await;
+        let mut diagnostics_error = None;
+        let (installed_rules, flow_entries, stats) = match state.as_mut() {
+            Some(state) => {
+                let installed_rules = state.installed_rules.len();
+                let flow_entries = match Self::count_flow_entries(&mut state.bpf) {
+                    Ok(value) => Some(value),
+                    Err(error) => {
+                        diagnostics_error = Some(error.to_string());
+                        None
+                    }
+                };
+                let stats = match Self::read_stats(&mut state.bpf) {
+                    Ok(value) => Some(value),
+                    Err(error) => {
+                        diagnostics_error = Some(error.to_string());
+                        None
+                    }
+                };
+                (installed_rules, flow_entries, stats)
+            }
+            None => (0, None, None),
+        };
 
         DataPlaneStatus {
             backend: "tc-aya".to_owned(),
             installed_rules,
             interface: Some(self.interface.clone()),
+            object_path: Some(self.object_path.display().to_string()),
+            flow_entries,
+            stats,
+            preflight: Some(self.preflight.clone()),
+            diagnostics_error,
         }
     }
 }

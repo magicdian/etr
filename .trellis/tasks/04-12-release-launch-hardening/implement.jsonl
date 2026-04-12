@@ -1,0 +1,8 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Crate boundary guidance for CLI, control runtime, config, and Linux-specific code placement"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Structured lifecycle and failure logging for startup, install, and reload/preflight paths"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Typed error expectations for preflight, install, and API edge mapping"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer contract checks across CLI, runtime, install, and debug API boundaries"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Testing and boundary constraints while expanding runtime/install behavior"}
+{"file": ".trellis/spec/backend/linux-tc-dataplane.md", "reason": "Linux runtime prerequisite, validation, and dataplane behavior contract"}

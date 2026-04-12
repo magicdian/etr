@@ -1,12 +1,14 @@
+mod install;
+
 use anyhow::Context;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use etr_config::EtrConfig;
-use etr_control::{AppRuntime, build_data_plane};
+use etr_control::{AppRuntime, BuildDataPlaneOptions, build_data_plane};
 use serde::Serialize;
 use std::path::PathBuf;
 use tokio::signal;
@@ -16,26 +18,62 @@ use tracing_subscriber::EnvFilter;
 #[derive(Debug, Parser)]
 #[command(name = "etrd", about = "etr control-plane daemon")]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+    #[command(flatten)]
+    run: RunArgs,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    Install(install::InstallArgs),
+    Uninstall(install::UninstallArgs),
+}
+
+#[derive(Debug, Args, Clone)]
+struct RunArgs {
     #[arg(long, env = "ETR_CONFIG", default_value = "config/etr.toml")]
     config: PathBuf,
     #[arg(long, env = "ETR_BPF_OBJECT")]
     bpf_object: Option<PathBuf>,
     #[arg(long, env = "RUST_LOG", default_value = "info")]
     log_filter: String,
+    #[arg(
+        long,
+        env = "ETR_ALLOW_PREFLIGHT_WARNINGS",
+        default_value_t = false,
+        help = "Allow startup to continue even if Linux dataplane preflight checks fail"
+    )]
+    allow_preflight_warnings: bool,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    init_tracing(&cli.log_filter)?;
 
-    let bootstrap_config = EtrConfig::load_from_path(&cli.config)
-        .with_context(|| format!("failed to parse config {}", cli.config.display()))?;
-    let data_plane = build_data_plane(&bootstrap_config, cli.bpf_object.clone())
-        .with_context(|| "failed to build selected data plane".to_owned())?;
-    let runtime = AppRuntime::bootstrap(cli.config.clone(), data_plane)
+    match cli.command {
+        Some(Command::Install(args)) => install::install(args),
+        Some(Command::Uninstall(args)) => install::uninstall(args),
+        None => run_daemon(cli.run).await,
+    }
+}
+
+async fn run_daemon(args: RunArgs) -> anyhow::Result<()> {
+    init_tracing(&args.log_filter)?;
+
+    let bootstrap_config = EtrConfig::load_from_path(&args.config)
+        .with_context(|| format!("failed to parse config {}", args.config.display()))?;
+    let data_plane = build_data_plane(
+        &bootstrap_config,
+        BuildDataPlaneOptions {
+            bpf_object: args.bpf_object.clone(),
+            allow_preflight_warnings: args.allow_preflight_warnings,
+        },
+    )
+    .with_context(|| "failed to build selected data plane".to_owned())?;
+    let runtime = AppRuntime::bootstrap(args.config.clone(), data_plane)
         .await
-        .with_context(|| format!("failed to bootstrap etr from {}", cli.config.display()))?;
+        .with_context(|| format!("failed to bootstrap etr from {}", args.config.display()))?;
 
     let snapshot = runtime.snapshot().await;
     let management_addr = snapshot.active_config.management.listen;
@@ -53,6 +91,8 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/healthz", get(healthz))
         .route("/api/v1/config", get(get_config))
+        .route("/api/v1/status", get(get_status))
+        .route("/api/v1/debug/dataplane", get(get_dataplane_debug))
         .route("/api/v1/admin/reload", post(reload_config))
         .with_state(runtime);
 
@@ -72,20 +112,33 @@ async fn main() -> anyhow::Result<()> {
 
 async fn healthz(State(runtime): State<AppRuntime>) -> Json<HealthResponse> {
     let snapshot = runtime.snapshot().await;
+    let preflight = snapshot.data_plane_status.preflight.as_ref();
 
     Json(HealthResponse {
-        status: "ok",
+        status: health_status_label(preflight),
         node_name: snapshot.active_config.service.node_name,
         config_path: snapshot.config_path.display().to_string(),
         rule_count: snapshot.last_apply_report.applied_rules,
         data_plane_backend: snapshot.data_plane_status.backend,
         data_plane_interface: snapshot.data_plane_status.interface,
         last_reload_unix_ms: snapshot.applied_at_unix_ms,
+        preflight_ok: preflight.map(|report| report.passed),
+        preflight_override_active: preflight.map(|report| report.override_active),
     })
 }
 
 async fn get_config(State(runtime): State<AppRuntime>) -> Json<etr_control::RuntimeSnapshot> {
     Json(runtime.snapshot().await)
+}
+
+async fn get_status(State(runtime): State<AppRuntime>) -> Json<etr_control::RuntimeSnapshot> {
+    Json(runtime.snapshot().await)
+}
+
+async fn get_dataplane_debug(
+    State(runtime): State<AppRuntime>,
+) -> Json<etr_control::DataPlaneStatus> {
+    Json(runtime.snapshot().await.data_plane_status)
 }
 
 async fn reload_config(
@@ -103,6 +156,8 @@ struct HealthResponse {
     data_plane_backend: String,
     data_plane_interface: Option<String>,
     last_reload_unix_ms: u128,
+    preflight_ok: Option<bool>,
+    preflight_override_active: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -152,6 +207,13 @@ fn init_tracing(filter: &str) -> anyhow::Result<()> {
         .compact()
         .try_init()
         .map_err(|error| anyhow::anyhow!("failed to initialize tracing subscriber: {error}"))
+}
+
+fn health_status_label(preflight: Option<&etr_control::PreflightReport>) -> &'static str {
+    match preflight {
+        Some(report) if !report.passed => "degraded",
+        _ => "ok",
+    }
 }
 
 async fn shutdown_signal() {

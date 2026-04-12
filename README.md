@@ -42,6 +42,8 @@ The daemon exposes:
 
 - `GET /healthz` for basic health and current rule count
 - `GET /api/v1/config` for the in-memory snapshot
+- `GET /api/v1/status` for runtime status including data-plane debug state
+- `GET /api/v1/debug/dataplane` for preflight results, flow counts, and runtime counters
 - `POST /api/v1/admin/reload` to reload the config file and re-apply rules
 
 ## Running The Control Plane
@@ -72,18 +74,89 @@ Current startup shape:
 etrd --config config/etr.toml --bpf-object /path/to/etr-ebpf-object
 ```
 
+Linux TC startup now runs productized preflight checks before dataplane activation.
+Critical failures stop startup by default. If you intentionally want degraded bring-up for debugging, use:
+
+```bash
+etrd --config config/etr.toml \
+  --bpf-object /path/to/etr-ebpf-object \
+  --allow-preflight-warnings
+```
+
 Current implementation assumptions:
 
 - attaches `etr_ingress` to TC ingress on `[data_plane].external_interface`
 - attaches `etr_egress` to TC egress on the same interface
 - syncs the `ETR_TC_FORWARD_RULES` and `ETR_TC_FLOW_STATE` maps from user-space config
+- exports runtime counters through the `ETR_TC_RUNTIME_STATS` map
 - performs forward `DNAT` on ingress, forward `SNAT/MASQUERADE` on egress, and reverse NAT on ingress for backend replies
+
+Frontend ports are not local user-space listeners.
+`etr` rewrites traffic that enters and leaves `[data_plane].external_interface`, so `curl 127.0.0.1:<frontend_port>` is expected to fail with `Connection refused`.
+Validate forwarding with traffic sent to the host's real interface address or public IP from another machine, not through loopback.
 
 Linux forwarding prerequisites:
 
 - `net.ipv4.ip_forward = 1`
 - `net.ipv4.conf.<external_interface>.rp_filter = 0` or `2`
+- `/sys/kernel/btf/vmlinux` must be present
+- the process must run with privileges sufficient for TC attach and BPF map access
+- `[data_plane].external_interface` must exist and be operational
 - upstream cloud security groups or host firewalls must allow the exposed frontend ports
+
+Persist the host routing baseline through a dedicated sysctl file instead of `etr` config.
+One workable pattern is:
+
+```bash
+cat <<'EOF' | sudo tee /etc/sysctl.d/99-ip-forward.conf
+net.ipv4.ip_forward = 1
+net.ipv4.conf.eth0.rp_filter = 0
+EOF
+
+sudo sysctl --system
+```
+
+Replace `eth0` with the same interface configured in `[data_plane].external_interface`.
+Avoid defining the same sysctl key in multiple files such as `/etc/sysctl.conf` and `/etc/sysctl.d/*.conf`, otherwise the lexicographically later entry wins and may override the intended value.
+
+If preflight is overridden, `/healthz` reports `degraded` and `/api/v1/debug/dataplane` exposes the failing checks.
+
+## Versioning And Release Workflow
+
+The workspace version in [`Cargo.toml`](./Cargo.toml) is the only version source.
+The format is `YYMM.D.BUILD`, for example `2604.13.1`.
+
+Bump the workspace version:
+
+```bash
+./scripts/bump_version.py --manifest-path Cargo.toml
+```
+
+Behavior:
+
+- if the existing version already matches today's `YYMM.D`, increment `BUILD`
+- otherwise rewrite the version to today's `YYMM.D.1`
+
+Build a versioned release bundle:
+
+```bash
+./scripts/build_release.sh
+```
+
+This produces an artifact like:
+
+```text
+target/release-bundle/etr-v2604.13.1-linux-x86_64.tar.gz
+```
+
+Bundle layout:
+
+```text
+bin/etrd
+lib/etr/etr-ebpf
+config/etr.toml.example
+share/etr/install.sh
+```
 
 ## Linux Build Notes
 
@@ -123,6 +196,48 @@ cargo run -p etrd -- \
 
 If you omit `--bpf-object`, Linux falls back to the safe `tc-stub` backend so you can still validate config parsing and the management API.
 
+## Installation
+
+Unpack the release bundle and install using either entry point:
+
+```bash
+sudo ./share/etr/install.sh
+```
+
+or:
+
+```bash
+sudo ./bin/etrd install
+```
+
+To start the service immediately:
+
+```bash
+sudo ./bin/etrd install --start
+```
+
+The canonical installation logic lives in `etrd install`, which:
+
+- installs `etrd` to `/usr/local/bin/etrd`
+- installs the eBPF object to `/usr/local/lib/etr/etr-ebpf`
+- installs the config example to `/etc/etr/etr.toml` if that file does not already exist
+- creates `/var/lib/etr`
+- installs a service definition using `systemd` when available, otherwise `/etc/init.d/etrd`
+
+After installation, `etrd install` prints the detected service manager and the exact command to check service status.
+
+Remove the installed service and binaries:
+
+```bash
+sudo /usr/local/bin/etrd uninstall
+```
+
+Also remove config and runtime state:
+
+```bash
+sudo /usr/local/bin/etrd uninstall --purge
+```
+
 ## Deployment Notes
 
 The current repository now contains:
@@ -131,5 +246,6 @@ The current repository now contains:
 - shared map key/value types used by both user-space and eBPF code
 - a Linux-only Aya TC backend loader in `etr-control`
 - a first-pass TC ingress/egress eBPF implementation in `ebpf/etr-ebpf`
-
-What is still pending is Linux-host validation of the eBPF build and runtime behavior.
+- a release-bundle workflow with versioned artifacts
+- canonical install and uninstall flows for `systemd` and init.d-style hosts
+- startup preflight diagnostics plus JSON dataplane debug/status surfaces

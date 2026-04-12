@@ -15,6 +15,7 @@ pub fn encode_enabled_rules(config: &EtrConfig) -> Vec<EncodedRule>
 
 pub const TC_FORWARD_RULES_MAP: &str = "ETR_TC_FORWARD_RULES";
 pub const TC_FLOW_STATE_MAP: &str = "ETR_TC_FLOW_STATE";
+pub const TC_RUNTIME_STATS_MAP: &str = "ETR_TC_RUNTIME_STATS";
 pub const TC_INGRESS_PROGRAM_NAME: &str = "etr_ingress";
 pub const TC_EGRESS_PROGRAM_NAME: &str = "etr_egress";
 ```
@@ -23,6 +24,12 @@ Runtime startup:
 
 ```bash
 etrd --config config/etr.toml --bpf-object /path/to/etr-ebpf
+```
+
+Override startup preflight only when intentionally accepting degraded bring-up:
+
+```bash
+etrd --config config/etr.toml --bpf-object /path/to/etr-ebpf --allow-preflight-warnings
 ```
 
 Linux eBPF build:
@@ -94,7 +101,16 @@ Operator prerequisites:
 
 - `net.ipv4.ip_forward = 1`
 - `net.ipv4.conf.<external_interface>.rp_filter = 0` or `2`
+- `/sys/kernel/btf/vmlinux` must be present
+- process must run with privileges sufficient for TC attach and BPF map access
+- `[data_plane].external_interface` must exist and be operational
 - cloud security groups and host firewalls must allow the configured frontend ports
+
+Observability contract:
+
+- `/api/v1/status` returns runtime snapshot including data-plane status
+- `/api/v1/debug/dataplane` returns backend identity, installed rules, active flow count, preflight report, and runtime counter summary
+- runtime counter summary includes ingress rule hits, ingress reverse hits, egress flow hits, flow creations, rule misses, and parse drops
 
 Encoding contract:
 
@@ -109,10 +125,12 @@ Encoding contract:
 | Linux startup without `--bpf-object` | `etr-control` | fall back to `tc-stub` with warning |
 | Missing TC program in object | Linux loader | return `DataPlaneError::Setup` |
 | Missing map in object | Linux loader | return `DataPlaneError::MapSync` |
+| Linux startup preflight fails | Linux loader | return `DataPlaneError::Preflight` unless override is enabled |
 | IPv6 rule in config | `etr-config` | reject config validation |
 | Multi-backend rule in MVP | `etr-config` | reject config validation |
 | `ip_forward = 0` | host runtime | packets may match eBPF but will not forward successfully |
 | strict `rp_filter = 1` | host runtime | NAT/forwarded packets may be dropped |
+| missing `/sys/kernel/btf/vmlinux` | host runtime | startup fails before dataplane activation |
 | wrong IPv4 map byte order | control/kernel boundary | backend address appears byte-swapped in packet capture |
 | forward SNAT applied at ingress | TC program ordering | flow state grows but end-to-end connection fails |
 
@@ -125,17 +143,21 @@ Good:
 - egress capture shows `10.1.0.10:* -> 163.223.125.6:18510`
 - backend SYN-ACK returns
 - client sees connection complete
+- `/api/v1/debug/dataplane` shows passing preflight checks and non-zero counters after traffic
+- UDP traffic through a configured rule also creates flow state and increments counters
 
 Base:
 
 - `etrd` runs on Linux with `--bpf-object`
-- `bpftool map show` lists the forward rule map and flow-state map
+- preflight passes or operator explicitly enabled `--allow-preflight-warnings`
+- `bpftool map show` lists the forward rule map, flow-state map, and runtime stats map
 - `bpftool map dump` shows configured frontend rules
 
 Bad:
 
 - no packets visible on `tcpdump -ni any 'tcp port <frontend>'`
 - flow-state map remains empty after external SYN
+- debug endpoint reports failed critical preflight checks while operator expected healthy startup
 - forwarded packets show `6.125.223.163` instead of `163.223.125.6`
 - backend SYN-ACK reaches the gateway but no translated response leaves toward the client
 
@@ -149,6 +171,8 @@ Bad:
   - start `etrd` with `--bpf-object`
   - confirm `tc filter show dev <if> ingress` and `egress` show `etr_ingress` and `etr_egress`
   - confirm `bpftool map dump` shows rule entries
+  - confirm `/api/v1/debug/dataplane` reports preflight state and runtime counters
+  - confirm both TCP and UDP traffic exercise the forwarding path
   - confirm packet capture shows forward SYN to backend and translated reply back to client
 
 Assertion points for Linux manual validation:
