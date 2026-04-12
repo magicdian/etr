@@ -1,51 +1,27 @@
 # Quality Guidelines
 
-> Code quality standards for frontend development.
-
----
+> Frontend quality rules for `etr`.
 
 ## Overview
 
-<!--
-Document your project's quality standards here.
-
-Questions to answer:
-- What patterns are forbidden?
-- What linting rules do you enforce?
-- What are your testing requirements?
-- What code review standards apply?
--->
-
-(To be filled by the team)
-
----
+There is no frontend code yet, so current quality guidance is mostly about avoiding accidental scope creep.
 
 ## Forbidden Patterns
 
-<!-- Patterns that should never be used and why -->
-
-(To be filled by the team)
-
----
+- Adding a speculative Web UI during backend-only work
+- Adding placeholder frontend directories without a real stack decision
+- Writing fake frontend guidelines that are not backed by code in the repo
 
 ## Required Patterns
 
-<!-- Patterns that must always be used -->
-
-(To be filled by the team)
-
----
+- If a frontend is introduced, update all frontend spec files in the same change
+- Base frontend conventions on actual committed code, not generic defaults
 
 ## Testing Requirements
 
-<!-- What level of testing is expected -->
-
-(To be filled by the team)
-
----
+Not applicable until a frontend exists.
 
 ## Code Review Checklist
 
-<!-- What reviewers should check -->
-
-(To be filled by the team)
+- Does this change really need frontend code?
+- If frontend code was added, were the frontend Trellis specs updated to reflect the real implementation?

@@ -1,0 +1,17 @@
+[package]
+name = "etr-control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+etr-config = { path = "../etr-config" }
+etr-types = { path = "../etr-types" }
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+aya.workspace = true

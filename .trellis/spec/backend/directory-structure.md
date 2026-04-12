@@ -1,54 +1,57 @@
 # Directory Structure
 
-> How backend code is organized in this project.
-
----
+> How backend code is organized in `etr`.
 
 ## Overview
 
-<!--
-Document your project's backend directory structure here.
-
-Questions to answer:
-- How are modules/packages organized?
-- Where does business logic live?
-- Where are API endpoints defined?
-- How are utilities and helpers organized?
--->
-
-(To be filled by the team)
-
----
+This repository uses a small Rust workspace with explicit crate boundaries.
+Keep transport concerns, config contracts, and runtime orchestration separate.
 
 ## Directory Layout
 
+```text
+config/
+  etr.toml              # Example runtime config
+crates/
+  etr-types/            # Shared wire types for kernel/user-space coordination
+  etr-config/           # Shared config schema and validation
+  etr-control/          # Runtime state and data-plane abstraction
+  etrd/                 # Daemon binary and HTTP management API
+docs/
+  architecture.md       # Current architecture notes
+ebpf/
+  etr-ebpf/             # Placeholder crate for future Aya eBPF programs
 ```
-<!-- Replace with your actual structure -->
-src/
-├── ...
-└── ...
-```
-
----
 
 ## Module Organization
 
-<!-- How should new features/modules be organized? -->
-
-(To be filled by the team)
-
----
+- Put schema and validation at the boundary:
+  `crates/etr-config/src/lib.rs`
+- Put kernel/user-space shared map contracts in:
+  `crates/etr-types/src/lib.rs`
+- Put long-lived runtime orchestration in `etr-control`:
+  `crates/etr-control/src/runtime.rs`
+- Put backend-specific forwarding abstractions in `etr-control`:
+  `crates/etr-control/src/dataplane.rs`
+- Put Linux-specific Aya loading and map sync in:
+  `crates/etr-control/src/linux.rs`
+- Keep the binary crate thin:
+  `crates/etrd/src/main.rs` should wire CLI, logging, HTTP routes, and shutdown
+- Keep eBPF programs out of the daemon crate:
+  kernel-side code belongs under `ebpf/`
 
 ## Naming Conventions
 
-<!-- File and folder naming rules -->
-
-(To be filled by the team)
-
----
+- Crate names use the `etr-*` prefix
+- File names use `snake_case`
+- Types use domain names, not framework names:
+  `EtrConfig`, `ForwardRule`, `AppRuntime`, `TcDataPlane`
+- Keep transport-specific names at the edge:
+  `HealthResponse` and `ApiError` stay in `etrd`, not shared crates
 
 ## Examples
 
-<!-- Link to well-organized modules as examples -->
-
-(To be filled by the team)
+- `crates/etr-config/src/lib.rs`: good example of boundary-owned types
+- `crates/etr-types/src/lib.rs`: good example of kernel/user-space shared contracts
+- `crates/etr-control/src/runtime.rs`: good example of shared runtime state without HTTP coupling
+- `crates/etrd/src/main.rs`: good example of thin entrypoint composition

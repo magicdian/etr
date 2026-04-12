@@ -1,51 +1,53 @@
 # Error Handling
 
-> How errors are handled in this project.
-
----
+> How errors are handled in `etr`.
 
 ## Overview
 
-<!--
-Document your project's error handling conventions here.
+Use typed errors inside library crates and convert them at the outer boundary.
 
-Questions to answer:
-- What error types do you define?
-- How are errors propagated?
-- How are errors logged?
-- How are errors returned to clients?
--->
-
-(To be filled by the team)
-
----
+- `etr-config` defines `ConfigError`
+- `etr-control` defines `ControlPlaneError` and wraps config/data-plane failures
+- `etrd` maps boundary errors into HTTP responses with status codes
+- `anyhow` is reserved for the binary entrypoint and startup composition
 
 ## Error Types
 
-<!-- Custom error classes/types -->
+- `ConfigError`:
+  for file I/O, TOML parse failures, and rule validation failures
+- `ControlPlaneError`:
+  for reload/bootstrap failures while coordinating config and data plane
+- `ApiError`:
+  for HTTP response mapping in the daemon binary
 
-(To be filled by the team)
+Examples:
 
----
+- `crates/etr-config/src/lib.rs`
+- `crates/etr-control/src/runtime.rs`
+- `crates/etrd/src/main.rs`
 
 ## Error Handling Patterns
 
-<!-- Try-catch patterns, error propagation -->
-
-(To be filled by the team)
-
----
+- Validate once at the config boundary, before mutating runtime state
+- Keep validation messages specific enough for operators to fix config quickly
+- Return typed errors from library crates with `thiserror`
+- Convert to transport-specific output only at the edge
+- Prefer `?` propagation over manual matching when the target error type is clear
 
 ## API Error Responses
 
-<!-- Standard error response format -->
+Current API errors use a small JSON shape:
 
-(To be filled by the team)
+```json
+{ "error": "human readable message" }
+```
 
----
+Use `400 Bad Request` for config or reload failures caused by invalid operator input.
+When future runtime faults need different handling, map them explicitly instead of collapsing everything into `500`.
 
 ## Common Mistakes
 
-<!-- Error handling mistakes your team has made -->
-
-(To be filled by the team)
+- Using `anyhow` in shared library crates where typed errors are more useful
+- Logging an error and then swallowing it instead of returning it
+- Mutating live runtime state before config validation completes
+- Returning opaque messages like `"reload failed"` without rule context

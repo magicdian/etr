@@ -1,51 +1,35 @@
 # Database Guidelines
 
-> Database patterns and conventions for this project.
-
----
+> Database patterns for `etr`.
 
 ## Overview
 
-<!--
-Document your project's database conventions here.
+There is no database in the current MVP architecture.
 
-Questions to answer:
-- What ORM/query library do you use?
-- How are migrations managed?
-- What are the naming conventions for tables/columns?
-- How do you handle transactions?
--->
+The first implementation is a single-host gateway daemon whose source of truth is a static config file. Runtime state lives in memory and is pushed into the data plane.
 
-(To be filled by the team)
+## Current Rule
 
----
+- Do not introduce a database casually
+- If persistence becomes necessary, update this file in the same change
+- Any storage introduction should explain:
+  - why config file + in-memory state is no longer enough
+  - what data is durable versus derived
+  - how schema evolution and migration will work
 
 ## Query Patterns
 
-<!-- How should queries be written? Batch operations? -->
-
-(To be filled by the team)
-
----
+Not applicable yet.
 
 ## Migrations
 
-<!-- How to create and run migrations -->
-
-(To be filled by the team)
-
----
+Not applicable yet.
 
 ## Naming Conventions
 
-<!-- Table names, column names, index names -->
-
-(To be filled by the team)
-
----
+Not applicable yet.
 
 ## Common Mistakes
 
-<!-- Database-related mistakes your team has made -->
-
-(To be filled by the team)
+- Adding a database before the control-plane contract is stable
+- Persisting derived forwarding state that can be rebuilt from config

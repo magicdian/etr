@@ -1,54 +1,19 @@
 # Directory Structure
 
-> How frontend code is organized in this project.
-
----
+> Frontend directory rules for `etr`.
 
 ## Overview
 
-<!--
-Document your project's frontend directory structure here.
+No frontend directory exists yet.
 
-Questions to answer:
-- Where do components live?
-- How are features/modules organized?
-- Where are shared utilities?
-- How are assets organized?
--->
+When a Web UI is introduced, add its actual layout here in the same change. Do not create speculative docs that pretend a frontend tree already exists.
 
-(To be filled by the team)
+## Current Rule
 
----
-
-## Directory Layout
-
-```
-<!-- Replace with your actual structure -->
-src/
-├── ...
-└── ...
-```
-
----
-
-## Module Organization
-
-<!-- How should new features be organized? -->
-
-(To be filled by the team)
-
----
-
-## Naming Conventions
-
-<!-- File and folder naming rules -->
-
-(To be filled by the team)
-
----
+- Backend-only changes should not create placeholder frontend app trees
+- If a UI is introduced, prefer a clearly separated app directory rather than mixing client files into Rust crates
 
 ## Examples
 
-<!-- Link to well-organized modules as examples -->
-
-(To be filled by the team)
+- Current backend-only repository layout:
+  `README.md`, `config/`, `crates/`, `docs/`, `ebpf/`

@@ -1,51 +1,14 @@
 # State Management
 
-> How state is managed in this project.
-
----
+> Frontend state management rules for `etr`.
 
 ## Overview
 
-<!--
-Document your project's state management conventions here.
+There is no frontend state layer yet.
 
-Questions to answer:
-- What state management solution do you use?
-- How is local vs global state decided?
-- How do you handle server state?
-- What are the patterns for derived state?
--->
+The current management surface is a local HTTP API served by `etrd`, not a browser client.
 
-(To be filled by the team)
+## Current Rule
 
----
-
-## State Categories
-
-<!-- Local state, global state, server state, URL state -->
-
-(To be filled by the team)
-
----
-
-## When to Use Global State
-
-<!-- Criteria for promoting state to global -->
-
-(To be filled by the team)
-
----
-
-## Server State
-
-<!-- How server data is cached and synchronized -->
-
-(To be filled by the team)
-
----
-
-## Common Mistakes
-
-<!-- State management mistakes your team has made -->
-
-(To be filled by the team)
+- Do not pre-select a frontend state library before a UI exists
+- If a Web UI is introduced, document how it consumes the existing management API and how config snapshots are cached or refreshed

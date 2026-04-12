@@ -1,51 +1,47 @@
 # Logging Guidelines
 
-> How logging is done in this project.
-
----
+> How logging is done in `etr`.
 
 ## Overview
 
-<!--
-Document your project's logging conventions here.
+Use `tracing` with structured fields.
 
-Questions to answer:
-- What logging library do you use?
-- What are the log levels and when to use each?
-- What should be logged?
-- What should NOT be logged (PII, secrets)?
--->
-
-(To be filled by the team)
-
----
+Current setup lives in `crates/etrd/src/main.rs` and uses `tracing-subscriber` with an environment filter.
 
 ## Log Levels
 
-<!-- When to use each level: debug, info, warn, error -->
-
-(To be filled by the team)
-
----
+- `info`:
+  daemon startup, management API bind, successful config apply, reload success
+- `warn`:
+  use when the daemon recovers or falls back but operator attention may still be useful
+- `error`:
+  request failures, startup failures, and unexpected shutdown or signal issues
+- `debug`:
+  reserve for future detailed rule diffing or per-flow diagnostics
 
 ## Structured Logging
 
-<!-- Log format, required fields -->
+- Prefer key/value fields over sentence-only logs
+- Include stable identifiers when possible:
+  `node`, `config_path`, `backend`, `rules`, `listen`
+- Keep messages short and action-oriented
+- Do not log entire config payloads by default
 
-(To be filled by the team)
+Examples:
 
----
+- `crates/etrd/src/main.rs`
+- `crates/etr-control/src/dataplane.rs`
 
 ## What to Log
 
-<!-- Important events to log -->
-
-(To be filled by the team)
-
----
+- startup configuration summary
+- management API listen address
+- successful config apply counts
+- reload failures with actionable error messages
+- data-plane backend identity such as `tc-stub` today and `tc-aya` later
 
 ## What NOT to Log
 
-<!-- Sensitive data, PII, secrets -->
-
-(To be filled by the team)
+- future secrets or API tokens if management auth is added
+- full operator config files unless a debug workflow explicitly opts in
+- packet payloads or high-volume per-packet logs

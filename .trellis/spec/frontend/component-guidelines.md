@@ -1,59 +1,17 @@
 # Component Guidelines
 
-> How components are built in this project.
-
----
+> Component conventions for `etr`.
 
 ## Overview
 
-<!--
-Document your project's component conventions here.
+No frontend components exist yet because the MVP defers Web UI work.
 
-Questions to answer:
-- What component patterns do you use?
-- How are props defined?
-- How do you handle composition?
-- What accessibility standards apply?
--->
+## Current Rule
 
-(To be filled by the team)
-
----
-
-## Component Structure
-
-<!-- Standard structure of a component file -->
-
-(To be filled by the team)
-
----
-
-## Props Conventions
-
-<!-- How props should be defined and typed -->
-
-(To be filled by the team)
-
----
-
-## Styling Patterns
-
-<!-- How styles are applied (CSS modules, styled-components, Tailwind, etc.) -->
-
-(To be filled by the team)
-
----
-
-## Accessibility
-
-<!-- A11y requirements and patterns -->
-
-(To be filled by the team)
-
----
+- Do not introduce component conventions until an actual frontend stack is chosen
+- If a UI is added, document real examples from the first committed components in this file
 
 ## Common Mistakes
 
-<!-- Component-related mistakes your team has made -->
-
-(To be filled by the team)
+- Writing speculative component rules before any component exists
+- Treating the management HTTP API as proof that a browser UI already belongs in the repo

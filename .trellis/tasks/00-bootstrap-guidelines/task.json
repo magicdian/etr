@@ -13,15 +13,15 @@
   "subtasks": [
     {
       "name": "Fill backend guidelines",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "name": "Fill frontend guidelines",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "name": "Add code examples",
-      "status": "pending"
+      "status": "completed"
     }
   ],
   "children": [],
@@ -30,6 +30,6 @@
     ".trellis/spec/backend/",
     ".trellis/spec/frontend/"
   ],
-  "notes": "First-time setup task created by trellis init (fullstack project)",
+  "notes": "Initial backend conventions, frontend deferred state, and code examples were documented after scaffolding the Rust control plane and eBPF project layout.",
   "meta": {}
 }
