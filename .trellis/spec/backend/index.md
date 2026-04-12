@@ -21,6 +21,7 @@ There is no database in the current architecture.
 | [Directory Structure](./directory-structure.md) | Module organization and file layout | Active |
 | [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | Not applicable yet |
 | [Error Handling](./error-handling.md) | Error types, handling strategies | Active |
+| [Linux TC Data Plane](./linux-tc-dataplane.md) | Executable NAT and forwarding contract for Linux TC | Active |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Active |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Active |
 
@@ -31,8 +32,9 @@ Before editing backend code:
 1. Read [Directory Structure](./directory-structure.md) for crate boundaries
 2. Read [Error Handling](./error-handling.md) when adding config, runtime, or API paths
 3. Read [Logging Guidelines](./logging-guidelines.md) before adding lifecycle or reload logs
-4. Read [Quality Guidelines](./quality-guidelines.md) before introducing new abstractions
-5. If a task introduces persistence, first update [Database Guidelines](./database-guidelines.md)
+4. Read [Linux TC Data Plane](./linux-tc-dataplane.md) when changing the Linux eBPF path, map layout, or NAT behavior
+5. Read [Quality Guidelines](./quality-guidelines.md) before introducing new abstractions
+6. If a task introduces persistence, first update [Database Guidelines](./database-guidelines.md)
 
 ## Current Backend Stack
 

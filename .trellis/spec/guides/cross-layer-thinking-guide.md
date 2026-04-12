@@ -77,11 +77,14 @@ Before implementation:
 - [ ] Identified all layer boundaries
 - [ ] Defined format at each boundary
 - [ ] Decided where validation happens
+- [ ] Checked byte order and in-memory layout for every kernel/user-space shared field
+- [ ] Checked whether packet rewrites happen at the correct hook timing, not just with the correct final values
 
 After implementation:
 - [ ] Tested with edge cases (null, empty, invalid)
 - [ ] Verified error handling at each boundary
 - [ ] Checked data survives round-trip
+- [ ] Verified the live packet path with captures or equivalent runtime inspection when infra hooks are involved
 
 ---
 
