@@ -68,6 +68,8 @@ On Linux, the daemon also falls back to `tc-stub` if you do not pass `--bpf-obje
 
 On Linux, `etrd` can consume a compiled eBPF object and use the Aya-backed TC data plane instead of the stub backend.
 
+For real-host TCP/UDP validation steps, see [`docs/linux-validation.md`](./docs/linux-validation.md).
+
 Current startup shape:
 
 ```bash

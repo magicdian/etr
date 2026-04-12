@@ -128,9 +128,11 @@ Encoding contract:
 | Linux startup preflight fails | Linux loader | return `DataPlaneError::Preflight` unless override is enabled |
 | IPv6 rule in config | `etr-config` | reject config validation |
 | Multi-backend rule in MVP | `etr-config` | reject config validation |
+| client tests `127.0.0.1:<frontend_port>` | validation workflow | request bypasses the external interface path and is expected to fail with local connection refusal |
 | `ip_forward = 0` | host runtime | packets may match eBPF but will not forward successfully |
 | strict `rp_filter = 1` | host runtime | NAT/forwarded packets may be dropped |
 | missing `/sys/kernel/btf/vmlinux` | host runtime | startup fails before dataplane activation |
+| public IP or upstream route is wrong | host ingress | `tcpdump` on the external interface shows no packets and dataplane rule-hit counters do not move |
 | wrong IPv4 map byte order | control/kernel boundary | backend address appears byte-swapped in packet capture |
 | forward SNAT applied at ingress | TC program ordering | flow state grows but end-to-end connection fails |
 
@@ -145,6 +147,7 @@ Good:
 - client sees connection complete
 - `/api/v1/debug/dataplane` shows passing preflight checks and non-zero counters after traffic
 - UDP traffic through a configured rule also creates flow state and increments counters
+- successful UDP validation increments `ingress_rule_hits`, `flow_creations`, and, when the backend responds, also increments `ingress_reverse_hits` and `egress_flow_hits`
 
 Base:
 
@@ -155,9 +158,11 @@ Base:
 
 Bad:
 
+- `curl 127.0.0.1:<frontend_port>` returns `Connection refused`
 - no packets visible on `tcpdump -ni any 'tcp port <frontend>'`
 - flow-state map remains empty after external SYN
 - debug endpoint reports failed critical preflight checks while operator expected healthy startup
+- external clients hit the wrong public IP, `tcpdump` shows no frontend traffic, and only unrelated `rule_misses` continue to rise
 - forwarded packets show `6.125.223.163` instead of `163.223.125.6`
 - backend SYN-ACK reaches the gateway but no translated response leaves toward the client
 
@@ -180,6 +185,7 @@ Assertion points for Linux manual validation:
 - forward SYN leaves with backend IP and original client source port
 - backend reply is translated back to frontend listener identity before leaving the host
 - flow-state map grows when external traffic hits a configured rule
+- loopback access to `127.0.0.1:<frontend_port>` is not used as a validation signal because it does not exercise TC forwarding on the external interface
 
 ### 7. Wrong vs Correct
 
@@ -217,6 +223,30 @@ Also encode IPv4 map addresses using packet-byte layout:
 let encoded = u32::from_ne_bytes(addr.octets());
 ```
 
+#### Wrong
+
+Validate a frontend rule using loopback or treat a successful service startup as proof that the frontend is reachable:
+
+```bash
+curl -vk https://127.0.0.1:18510
+systemctl status etrd.service
+```
+
+Why it fails:
+
+- `etr` is not a local TCP/UDP listener on `lo`
+- service health only proves bootstrap, not that external-interface traffic is reaching the host
+
+#### Correct
+
+Validate from another machine against the host's actual interface or public IP and correlate with dataplane counters:
+
+```bash
+curl -vk --connect-timeout 5 https://81.71.89.210:18510
+curl http://127.0.0.1:9911/api/v1/debug/dataplane
+sudo tcpdump -ni eth0 'tcp port 18510'
+```
+
 ## Common Mistakes
 
 ### Common Mistake: Assuming eBPF attach success means forwarding works
@@ -230,6 +260,30 @@ let encoded = u32::from_ne_bytes(addr.octets());
 - verify `ip_forward` and `rp_filter`
 - inspect rule and flow maps with `bpftool`
 - confirm packet path with `tcpdump`
+
+### Common Mistake: Using `127.0.0.1` to validate frontend reachability
+
+**Symptom**: `curl 127.0.0.1:<frontend_port>` returns `Connection refused`, so it looks like the frontend rule is broken.
+
+**Cause**: the frontend port is implemented as TC forwarding on the configured external interface, not as a local loopback listener.
+
+**Fix**:
+
+- validate from another host against the real interface IP or public IP
+- correlate the test with `/api/v1/debug/dataplane` counters
+- use `tcpdump` on the external interface, not just `lo`
+
+### Common Mistake: Chasing dataplane logic when the wrong public IP is being tested
+
+**Symptom**: external clients hang, but the gateway host sees no matching frontend traffic and only unrelated `rule_misses` increase.
+
+**Cause**: traffic is not reaching the host at all because the public IP, cloud NAT/LB path, or upstream routing is wrong.
+
+**Fix**:
+
+- confirm the tested public IP actually maps to the gateway host
+- capture on `tcpdump -ni <if> 'tcp port <frontend> or udp port <frontend>'`
+- if no packets arrive, debug the cloud/network path before changing `etr`
 
 ### Common Mistake: Reading full BPF map names from `bpftool`
 
