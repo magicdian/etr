@@ -62,26 +62,11 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
     )) {
         rewrite_ipv4_addr(
             &mut ctx,
-            ETH_HDR_LEN + offset_of!(Ipv4Hdr, saddr_be),
-            ETH_HDR_LEN + offset_of!(Ipv4Hdr, check_be),
-            checksum_offset,
-            ip.saddr_be,
-            flow.rewrite_src_addr_be,
-        )?;
-        rewrite_ipv4_addr(
-            &mut ctx,
             ETH_HDR_LEN + offset_of!(Ipv4Hdr, daddr_be),
             ETH_HDR_LEN + offset_of!(Ipv4Hdr, check_be),
             checksum_offset,
             ip.daddr_be,
             flow.rewrite_dst_addr_be,
-        )?;
-        rewrite_l4_port(
-            &mut ctx,
-            port_offset(protocol, l4_offset, true),
-            checksum_offset,
-            src_port_be,
-            flow.rewrite_src_port_be,
         )?;
         rewrite_l4_port(
             &mut ctx,
@@ -101,37 +86,52 @@ fn try_etr_ingress(mut ctx: TcContext) -> Result<i32, i32> {
         None => return Ok(TC_ACT_PIPE),
     };
 
-    let flow_key = FlowStateKey::new(
+    let reverse_ingress_key = FlowStateKey::new(
         protocol,
         rule.backend_addr_be,
         ip.daddr_be,
         rule.backend_port_be,
         src_port_be,
     );
-    let reverse_flow_value = FlowStateValue::new(
-        ip.daddr_be,
-        dst_port_be,
+    let reverse_ingress_value = FlowStateValue::new(
+        0,
+        0,
         ip.saddr_be,
         src_port_be,
         etr_types::SnatMode::Masquerade,
     );
-    let forward_flow_key = FlowStateKey::new(
+    let forward_egress_key = FlowStateKey::new(
         protocol,
         ip.saddr_be,
         rule.backend_addr_be,
         src_port_be,
         rule.backend_port_be,
     );
-    let forward_flow_value = FlowStateValue::new(
+    let forward_egress_value = FlowStateValue::new(
         ip.daddr_be,
         src_port_be,
+        0,
+        0,
+        etr_types::SnatMode::Masquerade,
+    );
+    let reverse_egress_key = FlowStateKey::new(
+        protocol,
         rule.backend_addr_be,
+        ip.saddr_be,
         rule.backend_port_be,
+        src_port_be,
+    );
+    let reverse_egress_value = FlowStateValue::new(
+        ip.daddr_be,
+        dst_port_be,
+        0,
+        0,
         etr_types::SnatMode::Masquerade,
     );
 
-    let _ = ETR_TC_FLOW_STATE.insert(&flow_key, &reverse_flow_value, 0);
-    let _ = ETR_TC_FLOW_STATE.insert(&forward_flow_key, &forward_flow_value, 0);
+    let _ = ETR_TC_FLOW_STATE.insert(&reverse_ingress_key, &reverse_ingress_value, 0);
+    let _ = ETR_TC_FLOW_STATE.insert(&forward_egress_key, &forward_egress_value, 0);
+    let _ = ETR_TC_FLOW_STATE.insert(&reverse_egress_key, &reverse_egress_value, 0);
 
     rewrite_ipv4_addr(
         &mut ctx,
