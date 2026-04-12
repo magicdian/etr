@@ -57,3 +57,35 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Sanitize tracked config and rewrite history
+
+**Date**: 2026-04-12
+**Task**: Sanitize tracked config and rewrite history
+
+### Summary
+
+Replaced the tracked runtime config with config/etr.toml.example, sanitized backend IPs to 8.8.8.8, added config/etr.toml to .gitignore, updated docs, guided git-filter-repo history cleanup, restored origin, and verified dev matches origin/dev after the force-push flow.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6cb54a5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
