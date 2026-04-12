@@ -50,7 +50,10 @@ fn to_kernel_snat_mode(mode: SnatMode) -> KernelSnatMode {
 
 fn ipv4_to_be_u32(ip: IpAddr) -> u32 {
     match ip {
-        IpAddr::V4(addr) => u32::from_be_bytes(addr.octets()),
+        // The TC eBPF program reads IPv4 addresses as raw packet bytes on a
+        // little-endian `bpfel` target, so user space must encode map values
+        // using native-endian integers whose in-memory bytes match the packet.
+        IpAddr::V4(addr) => u32::from_ne_bytes(addr.octets()),
         IpAddr::V6(_) => unreachable!("config validation rejects IPv6 in the MVP"),
     }
 }
@@ -100,12 +103,25 @@ mod tests {
 
         let rule = &encoded[0];
         assert_eq!(rule.key.protocol, TransportProtocol::Tcp as u8);
-        assert_eq!(rule.key.listen_addr_be, u32::from_be_bytes([0, 0, 0, 0]));
+        assert_eq!(rule.key.listen_addr_be, u32::from_ne_bytes([0, 0, 0, 0]));
         assert_eq!(rule.key.listen_port_be, 16020u16.to_be());
         assert_eq!(
             rule.value.backend_addr_be,
-            u32::from_be_bytes(Ipv4Addr::new(163, 223, 125, 6).octets())
+            u32::from_ne_bytes(Ipv4Addr::new(163, 223, 125, 6).octets())
         );
         assert_eq!(rule.value.backend_port_be, 11426u16.to_be());
+    }
+
+    #[test]
+    fn encodes_non_zero_listen_addr_using_packet_byte_layout() {
+        let mut config = sample_config();
+        config.rules[0].listen_addr = IpAddr::V4(Ipv4Addr::new(81, 71, 89, 210));
+
+        let encoded = encode_enabled_rules(&config);
+        assert_eq!(encoded.len(), 1);
+        assert_eq!(
+            encoded[0].key.listen_addr_be,
+            u32::from_ne_bytes(Ipv4Addr::new(81, 71, 89, 210).octets())
+        );
     }
 }
