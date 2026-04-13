@@ -179,6 +179,12 @@ Bad:
   - confirm `/api/v1/debug/dataplane` reports preflight state and runtime counters
   - confirm both TCP and UDP traffic exercise the forwarding path
   - confirm packet capture shows forward SYN to backend and translated reply back to client
+- automated Linux integration harness:
+  - `sudo cargo test -p etrd --test linux_tc_integration -- --ignored --nocapture`
+  - creates client, gateway, and backend namespaces on one bridge
+  - asserts that TCP and UDP both succeed through the Aya TC dataplane
+  - asserts that `ingress_rule_hits`, `flow_creations`, `ingress_reverse_hits`, and `egress_flow_hits` all increase
+  - requires a Linux host with root privileges and `CAP_NET_ADMIN`
 
 Assertion points for Linux manual validation:
 

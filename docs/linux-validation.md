@@ -10,6 +10,7 @@ Use this document to validate:
 - TCP forwarding works end to end
 - UDP forwarding works end to end
 - runtime counters and flow-state behavior match expectations
+- the automated Linux namespace-based integration harness
 
 This is not a loopback validation guide.
 `curl 127.0.0.1:<frontend_port>` is expected to fail because `etr` does not create a local listener on `lo`; it rewrites traffic that traverses the configured external interface.
@@ -27,6 +28,23 @@ This is not a loopback validation guide.
 - security groups, ACLs, and host firewall allow the frontend ports
 
 ## Useful Commands
+
+Run the automated integration harness:
+
+```bash
+sudo cargo test -p etrd --test linux_tc_integration -- --ignored --nocapture
+```
+
+The harness:
+
+- creates client, gateway, and backend network namespaces
+- bridges them on a single Linux L2 segment
+- runs `etrd` in the gateway namespace with the Aya TC backend
+- runs a small TCP and UDP backend service in the backend namespace
+- asserts that TCP and UDP both succeed and that dataplane counters increase
+
+It requires root, `iproute2`, `bpftool`, Python 3, and the Linux eBPF build toolchain.
+It also requires `CAP_NET_ADMIN` so the test can create network namespaces and attach TC programs.
 
 Check service health:
 
@@ -196,3 +214,12 @@ For each environment, capture at least:
 - whether TCP succeeded end to end
 - whether UDP succeeded end to end
 - a short note if security-group or routing issues were discovered outside the host
+
+## Automation Notes
+
+The automated harness lives at:
+
+- [`scripts/run_linux_tc_integration.sh`](../scripts/run_linux_tc_integration.sh)
+- [`crates/etrd/tests/linux_tc_integration.rs`](../crates/etrd/tests/linux_tc_integration.rs)
+
+It is marked as an ignored test because it requires root privileges and Linux namespace features that are not available in every development environment.

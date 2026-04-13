@@ -69,6 +69,13 @@ On Linux, the daemon also falls back to `tc-stub` if you do not pass `--bpf-obje
 On Linux, `etrd` can consume a compiled eBPF object and use the Aya-backed TC data plane instead of the stub backend.
 
 For real-host TCP/UDP validation steps, see [`docs/linux-validation.md`](./docs/linux-validation.md).
+For the automated Linux namespace-based integration harness, run:
+
+```bash
+sudo cargo test -p etrd --test linux_tc_integration -- --ignored --nocapture
+```
+
+This requires a Linux host with root privileges and `CAP_NET_ADMIN`.
 
 Current startup shape:
 

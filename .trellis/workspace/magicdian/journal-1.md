@@ -134,3 +134,45 @@ Replaced the tracked runtime config with config/etr.toml.example, sanitized back
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Linux Validation Runbook And UDP Verification
+
+**Date**: 2026-04-13
+**Task**: Linux Validation Runbook And UDP Verification
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Validation docs | Added a Linux real-host validation runbook for TCP and UDP forwarding, including expected dataplane counters, packet-capture checks, and backend reachability checks |
+| Code-spec update | Extended the Linux TC code-spec with executable guidance for loopback-vs-interface validation, wrong-public-IP troubleshooting, and UDP success signals |
+| Manual verification | Confirmed that TCP end-to-end forwarding works against the real frontend IP and that UDP traffic increments rule-hit, flow-creation, reverse-hit, and egress-flow counters on Linux |
+| README sync | Linked the new runbook from README and clarified that `127.0.0.1:<frontend_port>` is not a valid validation path |
+
+**Residual Work**:
+- Automated Linux integration coverage is still lighter than the original productization goal
+- Task remains active until that gap is either implemented or explicitly deferred
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `849f4d980e99032f4fabe472d0a9d216ba321998` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
