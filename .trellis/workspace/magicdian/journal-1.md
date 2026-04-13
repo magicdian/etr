@@ -176,3 +176,48 @@ Replaced the tracked runtime config with config/etr.toml.example, sanitized back
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Automated Linux TC Integration Harness
+
+**Date**: 2026-04-13
+**Task**: Automated Linux TC Integration Harness
+
+### Summary
+
+(Add summary)
+
+### Main Changes
+
+| Area | Description |
+|------|-------------|
+| Automated coverage | Added a Linux namespace-based integration harness that provisions client, gateway, and backend namespaces and exercises the Aya TC dataplane for both TCP and UDP |
+| Test entrypoint | Added an ignored cargo integration test that invokes the harness through `cargo test -p etrd --test linux_tc_integration -- --ignored --nocapture` |
+| Assertions | The harness validates TCP and UDP success plus dataplane counter growth for rule hits, flow creation, reverse hits, and egress flow hits |
+| Environment checks | Added explicit harness checks for root privileges, `CAP_NET_ADMIN`, and namespace creation support so unsupported environments fail with actionable messages |
+| Docs/spec | Updated README, Linux validation runbook, and Linux TC code-spec to document the automated harness and its runtime requirements |
+| Task status | Archived the `release-launch-hardening` task because release packaging, install flow, preflight, observability, manual validation, and automated Linux integration coverage are now in place |
+
+**Verification**:
+- `cargo fmt --all --check`
+- `cargo test`
+- direct harness execution attempted in the current sandbox, but namespace creation is blocked by environment permissions; the harness now reports that limitation explicitly
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c5561dc539640f35be60e81fa1b4012edb89c8e1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
