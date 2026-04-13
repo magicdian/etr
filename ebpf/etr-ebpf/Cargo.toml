@@ -1,0 +1,13 @@
+[package]
+name = "etr-ebpf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "etr-ebpf"
+path = "src/main.rs"
+
+[dependencies]
+aya-ebpf = "0.1.1"
+etr-types = { path = "../../crates/etr-types" }

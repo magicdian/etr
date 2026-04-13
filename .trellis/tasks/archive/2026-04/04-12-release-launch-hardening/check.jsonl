@@ -1,0 +1,8 @@
+{"file": ".opencode/commands/trellis/finish-work.md", "reason": "Finish work checklist"}
+{"file": ".opencode/commands/trellis/check-backend.md", "reason": "Backend check spec"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Verify crate boundaries remain clean across release/install/runtime additions"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Verify typed error and API error behavior for install/preflight/debug flows"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Verify structured logs and actionable failures on lifecycle paths"}
+{"file": ".trellis/spec/backend/linux-tc-dataplane.md", "reason": "Verify Linux prerequisite handling and validation coverage stay aligned with contract"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Verify new CLI/runtime/debug contracts are consistent across layers"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify tests and scope boundaries after implementation"}

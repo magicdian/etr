@@ -1,0 +1,7 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend development guide"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Backend project structure conventions for etr"}
+{"file": ".trellis/spec/backend/logging-guidelines.md", "reason": "Logging conventions for daemon lifecycle and reload events"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Error handling conventions for daemon and API"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer contract between config, API, and eBPF rule model"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality requirements for Rust services"}
